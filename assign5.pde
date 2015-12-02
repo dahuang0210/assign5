@@ -1,4 +1,4 @@
- /** 
+/** 
  Assignment 5
  Author:          Bao Yuchen
  Student Number:  103254021
@@ -243,6 +243,7 @@ abstract class DrawingOBJ {
   public int classID = ObjType.NOTHING;
   public int objWidth, objHeight;
   public int x, y;
+  public float xSpeed, ySpeed;
   public int zOrder;
   public int light, opacity;
   public float angle;
@@ -256,6 +257,8 @@ abstract class DrawingOBJ {
     img = image;
     x = 0;
     y = 0;
+    xSpeed = 0;
+    ySpeed = 0;
     light = 255;
     opacity = 255;
     zOrder = 0;
@@ -330,30 +333,48 @@ abstract class DrawingOBJ {
     text(str, textx, texty);
   }
 
-  public float moveToOBJ(DrawingOBJ target) {
-    return moveToOBJ(target, 10, 64,2);
+  public void addYSpeed(float addValue) {
+    float maxSpeed = getSpeed();
+    ySpeed += addValue;
+    if (ySpeed>maxSpeed ) {
+      ySpeed = maxSpeed;
+      xSpeed = 0;
+    } else if (ySpeed < - maxSpeed) {
+      ySpeed = - maxSpeed;
+      xSpeed=0;
+    } else if (ySpeed == 0) {
+      xSpeed = maxSpeed;
+    } else {
+      xSpeed = sqrt(maxSpeed*maxSpeed-ySpeed*ySpeed);
+    }
   }
 
-  public float moveToOBJ(DrawingOBJ target, int maxStep, int speed,int minMove) {
-    int yMove = (target.y-y);// (fightY-eY)/2^6 fast calculate
-    float step = floor(yMove / speed);
-    if (yMove > 0){
-      if (step > maxStep){
-        step = maxStep;
-      }else if(step < minMove){
-        step = minMove;
-      }
-    }else if (yMove <0){
-      if (step < -maxStep){
-        step = -maxStep;
-      }else if (step > -minMove){
-        step = - minMove;
-      }
-    }else{
-      step = 0;
+  public void moveToOBJ(DrawingOBJ target) {
+    moveToOBJ(target, 0.3);
+  }
+
+  public void moveToOBJ(DrawingOBJ target, float yAccelerated) {
+    float yMove = (target.y - y);
+    float xMove = (target.x - x);
+    float targetYSpeed = 0;
+    if (xMove!=0) {
+      targetYSpeed = -yMove / xMove * (xSpeed + target.xSpeed);
     }
-    y += floor(step);
-    return step;
+    if (targetYSpeed > ySpeed) {
+      addYSpeed(yAccelerated);
+    } else if (targetYSpeed < ySpeed) {
+      addYSpeed(-yAccelerated);
+    }
+  }
+
+  public float getSpeed() {
+    if (xSpeed ==0 ) {
+      return ySpeed;
+    } else if (ySpeed ==0) {
+      return xSpeed;
+    } else {
+      return sqrt(xSpeed*xSpeed +ySpeed*ySpeed);
+    }
   }
 
   public float getDestanceBetweenOBJ(DrawingOBJ target) {
@@ -571,7 +592,6 @@ class Treasure extends DrawingOBJ {
 
 class Enemy extends DrawingOBJ {
 
-  public int eSpeed;
   protected boolean isInTeam;
   private Fighter target = null;
   private Bullet[] bulletArray;
@@ -587,7 +607,7 @@ class Enemy extends DrawingOBJ {
     this.bulletArray = bulletArray;
     isInTeam = false;
     randomEnemy(true);
-    eSpeed = floor(eSpeed * (level/50f+1));
+    xSpeed = floor(xSpeed * (level/50f+1));
     maxHP = 1;
     hp = maxHP;
   }
@@ -613,10 +633,10 @@ class Enemy extends DrawingOBJ {
 
   private void normalMove() {
     // normal moves
-    x += eSpeed;
+    x += xSpeed;
     if ((!isInTeam)&&((x - (objWidth>>1))<(target.x + (target.objWidth>>1)))) {
-      float ss = eSpeed;
-      angle = atan(moveToOBJ(target)/ss);
+      moveToOBJ(target);
+      angle = atan(ySpeed/xSpeed);
     }
     if (this.isHitOBJ(target)) {
       if (listener != null) {
@@ -654,12 +674,12 @@ class Enemy extends DrawingOBJ {
       textAlign(LEFT);
       textSize(16);
       // draw different color with different speed
-      if (eSpeed > 10) {
+      if (xSpeed > 10) {
         // 10 - 20 yellow to red
-        drawStrokeText("" + eSpeed, color(255, 255 - floor((eSpeed-10)/10f * 255), 0), #ffffff, 25, y+ 8, 1);
+        drawStrokeText("" + xSpeed, color(255, 255 - floor((xSpeed-10)/10f * 255), 0), #ffffff, 25, y+ 8, 1);
       } else {
         // 1 - 10 green to yellow
-        drawStrokeText("" + eSpeed, color(floor((eSpeed)/10f * 255), 255, 0), #ffffff, 25, y+ 8, 1);
+        drawStrokeText("" + xSpeed, color(floor((xSpeed)/10f * 255), 255, 0), #ffffff, 25, y+ 8, 1);
       }
       textSize(tSize);
       drawStrokeText("!", #ff0000, #ffffff, 10, y + (tSize >> 1), 1);
@@ -669,7 +689,7 @@ class Enemy extends DrawingOBJ {
 
   private void randomEnemy(boolean isAvoidFighter) {
     x = -100 - objWidth;
-    eSpeed = floor(random(1, 5));
+    xSpeed = floor(random(1, 5));
     do {
       y = floor(random(0, 450));
       // if need avoid fighter and enemy is in fighter line then random again
@@ -787,6 +807,7 @@ class FrameAnimation extends DrawingOBJ {
     targetOBJ = target;
     x = target.x;
     y = target.y;
+    xSpeed = target.xSpeed;
   }
 
   public void SpecialDraw() {
@@ -809,11 +830,9 @@ class FrameAnimation extends DrawingOBJ {
       if (targetOBJ.classID == ObjType.FIGHTER) {
         x = targetOBJ.x;
         y = targetOBJ.y;
-      } else if (targetOBJ.classID == ObjType.ENEMY) {
-        Enemy temp =(Enemy)targetOBJ; 
-        x+= temp.eSpeed;
       }
     }
+    x += xSpeed;
   }
 }
 
@@ -822,8 +841,6 @@ class FrameAnimation extends DrawingOBJ {
 
 class Bullet extends DrawingOBJ {
 
-  public int speed = 10;
-
   private boolean isEnabled;
   private DrawingOBJ target;
 
@@ -831,6 +848,7 @@ class Bullet extends DrawingOBJ {
     super(31, 27, resourcesManager.get(ResourcesManager.bullet), ObjType.BULLET);
     this.target = target;
     isEnabled = false;
+    xSpeed = 10;
   }
 
   public boolean shoot() {
@@ -840,6 +858,8 @@ class Bullet extends DrawingOBJ {
       isEnabled = true;
       x = target.x;
       y = target.y;
+      xSpeed = 10;
+      ySpeed = 0;
     }
     return true;
   }
@@ -850,7 +870,13 @@ class Bullet extends DrawingOBJ {
   public void doGameLogic() {
     isEnabled = (x>-objWidth);
     if (isEnabled) {
-      x -= speed;
+      x -= xSpeed;
+      y += ySpeed;
+    }
+    if (ySpeed !=0) {
+      angle = atan(-ySpeed/xSpeed);
+    } else {
+      angle = 0;
     }
     setIsDrawSelf(isEnabled);
   }
@@ -874,7 +900,7 @@ class Bullet extends DrawingOBJ {
 
 class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
-  private final int SHOOT_DELAY = 70;
+  private final int SHOOT_DELAY = 100;
 
   public int level, hp;
   private long lastShootTime;
@@ -955,13 +981,16 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
       listener.endGame(level);
     }
     if (fighting) {
-      boolean isShoot =false;
       long timeErr = millis() - lastShootTime;
-      for (int i=0; ((i<5) &&(timeErr>SHOOT_DELAY)); i++) {
-        isShoot = bulletArray[i].shoot();
-        if (isShoot) {
-          lastShootTime = millis();
-          break;
+      if (timeErr>SHOOT_DELAY) {
+        boolean isShoot =false;
+        for (int i=0; (i<5); i++) {
+          isShoot = bulletArray[i].shoot();
+          if (isShoot) {
+            lastShootTime = millis();
+            timeErr = 0;
+            break;
+          }
         }
       }
     }
@@ -989,13 +1018,13 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
   private void bulletFollow() {
     for (Bullet i : bulletArray) {
       if (i.isBulletEnabled()) {
+        float bulletA = 0.2;
         int index = closestEnemy(i.x, i.y);
         if (index > -1) {
           DrawingOBJ temp = drawingArray.get(index);
-          float ss = i.speed;
-          i.angle = atan(-i.moveToOBJ(temp, 10, 32,1)/ss);
-        }else{
-          i.angle = 0;
+          i.moveToOBJ(temp, bulletA);
+        } else {
+          i.moveToOBJ(i, bulletA);
         }
       }
     }
@@ -1005,7 +1034,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
     Enemy newEnemy = new Enemy(bulletArray, fighter, this, level);
     newEnemy.x = newEnemy.x - x_offset;
     newEnemy.y = y;
-    newEnemy.eSpeed = speed;
+    newEnemy.xSpeed = speed;
     newEnemy.setIsInTeam(true);
     drawingArray.add(newEnemy);
   }
@@ -1079,6 +1108,9 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
   public void keyPressedFun(int keyCode1) {
     fighter.keyPressedFun(keyCode1);
     if (keyCode1 == 32) {
+      if (fighting == false) {
+        lastShootTime = millis() - SHOOT_DELAY -1;
+      }
       fighting = true;
     }
   }

@@ -1,8 +1,8 @@
-/** 
+ /** 
  Assignment 5
  Author:          Bao Yuchen
  Student Number:  103254021
- Update:          2015/11/30
+ Update:          2015/12/02
  */
 
 public class ObjType {
@@ -331,22 +331,26 @@ abstract class DrawingOBJ {
   }
 
   public float moveToOBJ(DrawingOBJ target) {
-    return moveToOBJ(target, 10, 64);
+    return moveToOBJ(target, 10, 64,2);
   }
 
-  public float moveToOBJ(DrawingOBJ target, int maxStep, int speed) {
+  public float moveToOBJ(DrawingOBJ target, int maxStep, int speed,int minMove) {
     int yMove = (target.y-y);// (fightY-eY)/2^6 fast calculate
-    float step = yMove / speed;
-    if (step < -maxStep) {
-      step = -maxStep;
-    } else if (step>maxStep) {
-      step = maxStep;
-    } else if (step == 0) {
-      int tempH = target.objHeight;
-      if (tempH ==0) {
-        tempH = 1;
+    float step = floor(yMove / speed);
+    if (yMove > 0){
+      if (step > maxStep){
+        step = maxStep;
+      }else if(step < minMove){
+        step = minMove;
       }
-      step = yMove / tempH;// make sure that the enemy can hit fighter and avoid bullets
+    }else if (yMove <0){
+      if (step < -maxStep){
+        step = -maxStep;
+      }else if (step > -minMove){
+        step = - minMove;
+      }
+    }else{
+      step = 0;
     }
     y += floor(step);
     return step;
@@ -971,7 +975,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
       DrawingOBJ temp = drawingArray.get(i);
       if (temp.classID == ObjType.ENEMY) {
         float destance = temp.getDestanceBetweenOBJ(x, y);
-        if (temp.x < x ) {
+        if (temp.x < x && temp.x > 0) {
           if (destance < minDestance) {
             minDestance = destance;
             ret = i;
@@ -989,7 +993,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
         if (index > -1) {
           DrawingOBJ temp = drawingArray.get(index);
           float ss = i.speed;
-          i.angle = atan(-i.moveToOBJ(temp, 10, 32)/ss);
+          i.angle = atan(-i.moveToOBJ(temp, 10, 32,1)/ss);
         }else{
           i.angle = 0;
         }

@@ -2,7 +2,7 @@
  Assignment 5
  Author:          Bao Yuchen
  Student Number:  103254021
- Update:          2015/12/02
+ Update:          2015/12/03
  */
 
 public class ObjType {
@@ -242,7 +242,7 @@ class GamePlayScene implements ScreenChangeListener {
 abstract class DrawingOBJ {
   public int classID = ObjType.NOTHING;
   public int objWidth, objHeight;
-  public int x, y;
+  public float x, y;
   public float xSpeed, ySpeed;
   public int zOrder;
   public int light, opacity;
@@ -266,6 +266,18 @@ abstract class DrawingOBJ {
 
   public void setIsDrawSelf(boolean isDrawSelf) {
     this.isDrawSelf = isDrawSelf;
+  }
+
+  public void updateAngle() {
+    if (xSpeed == 0) {
+      if (ySpeed>0) {
+        angle = PI/2;
+      } else {
+        angle = -PI/2;
+      }
+    } else {
+      angle = atan(ySpeed/xSpeed);
+    }
   }
 
   public void drawFrame() {
@@ -301,7 +313,7 @@ abstract class DrawingOBJ {
   }
 
   public boolean isHitOBJ(DrawingOBJ obj, int xxOffset, int yyOffset) {
-    return isHit(obj.x, obj.y, obj.objWidth, obj.objHeight, x, y, objWidth-xxOffset, objHeight-yyOffset);
+    return isHit(floor(obj.x), floor(obj.y), obj.objWidth, obj.objHeight, floor(x), floor(y), objWidth-xxOffset, objHeight-yyOffset);
   }
 
   public boolean isHit(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
@@ -336,7 +348,7 @@ abstract class DrawingOBJ {
   public void addYSpeed(float addValue) {
     float maxSpeed = getSpeed();
     ySpeed += addValue;
-    if (ySpeed>maxSpeed ) {
+    if (ySpeed > maxSpeed ) {
       ySpeed = maxSpeed;
       xSpeed = 0;
     } else if (ySpeed < - maxSpeed) {
@@ -358,27 +370,31 @@ abstract class DrawingOBJ {
     float xMove = (target.x - x);
     float targetYSpeed = 0;
     if (xMove!=0) {
-      targetYSpeed = -yMove / xMove * (xSpeed + target.xSpeed);
+      targetYSpeed = yMove / xMove * (xSpeed + target.xSpeed);
     }
-    if (targetYSpeed > ySpeed) {
+    float speedErr = targetYSpeed - ySpeed;
+    if (speedErr > yAccelerated) {
       addYSpeed(yAccelerated);
-    } else if (targetYSpeed < ySpeed) {
+    } else if (speedErr < -yAccelerated) {
       addYSpeed(-yAccelerated);
+    } else { 
+      addYSpeed(speedErr);
     }
+    updateAngle();
   }
 
   public float getSpeed() {
     if (xSpeed ==0 ) {
-      return ySpeed;
+      return ceil(abs(ySpeed));
     } else if (ySpeed ==0) {
-      return xSpeed;
+      return ceil(abs(xSpeed));
     } else {
       return sqrt(xSpeed*xSpeed +ySpeed*ySpeed);
     }
   }
 
   public float getDestanceBetweenOBJ(DrawingOBJ target) {
-    return getDestanceBetweenOBJ(target.x, target.y);
+    return getDestanceBetweenOBJ(floor(target.x), floor(target.y));
   }
 
   public float getDestanceBetweenOBJ(int targetX, int targetY) {
@@ -600,8 +616,6 @@ class Enemy extends DrawingOBJ {
 
   public Enemy(Bullet[] bulletArray, Fighter target, GameDataChanged listener, int level) {
     super(60, 60, resourcesManager.get(ResourcesManager.enemy), ObjType.ENEMY);
-    //super(60, 60, resourcesManager.get(ResourcesManager.enemy), ObjType.ENEMY);
-    //setIsDrawSelf(false);
     this.listener = listener;
     this.target = target;
     this.bulletArray = bulletArray;
@@ -623,7 +637,6 @@ class Enemy extends DrawingOBJ {
   }
 
   public void doGameLogic() {
-    angle = 0;
     if (x < -objWidth) {
       showAlarm();
     } else {
@@ -634,9 +647,13 @@ class Enemy extends DrawingOBJ {
   private void normalMove() {
     // normal moves
     x += xSpeed;
-    if ((!isInTeam)&&((x - (objWidth>>1))<(target.x + (target.objWidth>>1)))) {
-      moveToOBJ(target);
-      angle = atan(ySpeed/xSpeed);
+    y += ySpeed;
+    if (!isInTeam) {
+      if (x < target.x) {
+        moveToOBJ(target);
+      } else {
+        moveToOBJ(this);
+      }
     }
     if (this.isHitOBJ(target)) {
       if (listener != null) {
@@ -674,15 +691,17 @@ class Enemy extends DrawingOBJ {
       textAlign(LEFT);
       textSize(16);
       // draw different color with different speed
-      if (xSpeed > 10) {
+      if (xSpeed > 20 ) {
+        drawStrokeText("" + xSpeed, color(255, 0, 0), #ffffff, 25, floor(y+ 8), 1);
+      } else if (xSpeed > 10) {
         // 10 - 20 yellow to red
-        drawStrokeText("" + xSpeed, color(255, 255 - floor((xSpeed-10)/10f * 255), 0), #ffffff, 25, y+ 8, 1);
+        drawStrokeText("" + xSpeed, color(255, 255 - floor((xSpeed-10)/10f * 255), 0), #ffffff, 25, floor(y+ 8), 1);
       } else {
         // 1 - 10 green to yellow
-        drawStrokeText("" + xSpeed, color(floor((xSpeed)/10f * 255), 255, 0), #ffffff, 25, y+ 8, 1);
+        drawStrokeText("" + xSpeed, color(floor((xSpeed)/10f * 255), 255, 0), #ffffff, 25, floor(y+ 8), 1);
       }
       textSize(tSize);
-      drawStrokeText("!", #ff0000, #ffffff, 10, y + (tSize >> 1), 1);
+      drawStrokeText("!", #ff0000, #ffffff, 10, floor(y + (tSize >> 1)), 1);
     }
     x += 1;
   }
@@ -690,6 +709,7 @@ class Enemy extends DrawingOBJ {
   private void randomEnemy(boolean isAvoidFighter) {
     x = -100 - objWidth;
     xSpeed = floor(random(1, 5));
+    ySpeed =0;
     do {
       y = floor(random(0, 450));
       // if need avoid fighter and enemy is in fighter line then random again
@@ -699,8 +719,8 @@ class Enemy extends DrawingOBJ {
   private boolean isInTargetLine(Fighter obj) {
     int yOffset = objHeight >> 1 ;
     int yOffset1 = obj.objHeight >>1;
-    int top = y + yOffset, bottom = y - yOffset;
-    int tt = obj.y + yOffset1, tb = obj.y - yOffset1;
+    int top =floor(y + yOffset), bottom =floor(y - yOffset);
+    int tt =floor(obj.y + yOffset1), tb = floor(obj.y - yOffset1);
     if ((bottom < tt)&&(top > tb)) {
       return true;
     }
@@ -724,7 +744,7 @@ class GameTitle extends DrawingOBJ {
   public void SpecialDraw() {
     textSize(15);
     textAlign(CENTER);
-    drawStrokeText(hp + "", #ffffff, #000000, x + 112, y + 17, 1);
+    drawStrokeText(hp + "", #ffffff, #000000, floor(x + 112), floor(y + 17), 1);
     drawLV();
   }
 
@@ -871,12 +891,7 @@ class Bullet extends DrawingOBJ {
     isEnabled = (x>-objWidth);
     if (isEnabled) {
       x -= xSpeed;
-      y += ySpeed;
-    }
-    if (ySpeed !=0) {
-      angle = atan(-ySpeed/xSpeed);
-    } else {
-      angle = 0;
+      y -= ySpeed;
     }
     setIsDrawSelf(isEnabled);
   }
@@ -971,7 +986,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
     doBackgroundLogic();
     //*
     boolean isSpealLevel = false;//(level%20 == 0);
-    if ((level>0)&&(isSpealLevel)&&(!added)) {
+    if ((level>-1)&&(isSpealLevel)&&(!added)) {
       added = true;
       drawingArray.add(new Enemy(bulletArray, fighter, this, level));
     } else if (added&&(!isSpealLevel)) {
@@ -997,13 +1012,13 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
     bulletFollow();
   }
 
-  private int closestEnemy(int x, int y) {
+  private int closestEnemy(float x, float y) {
     int ret = -1;
     float minDestance = 999;
     for (int i = 0; (i < drawingArray.size()); i++) {
       DrawingOBJ temp = drawingArray.get(i);
       if (temp.classID == ObjType.ENEMY) {
-        float destance = temp.getDestanceBetweenOBJ(x, y);
+        float destance = temp.getDestanceBetweenOBJ(floor(x), floor(y));
         if (temp.x < x && temp.x > 0) {
           if (destance < minDestance) {
             minDestance = destance;
@@ -1073,7 +1088,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
   }
 
   private void doBackgroundLogic() {
-    x = moveBG(x);
+    x = moveBG(floor(x));
     bg2x = moveBG(bg2x);
     image(resourcesManager.get(ResourcesManager.bg2), bg2x, y);
   }

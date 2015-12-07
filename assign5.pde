@@ -275,12 +275,20 @@ abstract class DrawingOBJ {
       } else {
         angle = -PI/2;
       }
+    } else if (ySpeed == 0) {
+      angle = 0;
     } else {
       angle = atan(ySpeed/xSpeed);
     }
   }
 
+  public void updateLocation() {
+    x += xSpeed;
+    y += ySpeed;
+  }
+
   public void drawFrame() {
+    updateLocation();
     doGameLogic();
     SpecialDraw();
     if (isDrawSelf && (img != null)) {
@@ -394,10 +402,10 @@ abstract class DrawingOBJ {
   }
 
   public float getDestanceBetweenOBJ(DrawingOBJ target) {
-    return getDestanceBetweenOBJ(floor(target.x), floor(target.y));
+    return getDestanceBetweenOBJ(target.x, target.y);
   }
 
-  public float getDestanceBetweenOBJ(int targetX, int targetY) {
+  public float getDestanceBetweenOBJ(float targetX, float targetY) {
     float xerr = targetX - x, yerr = targetY - y;
     return sqrt(xerr * xerr + yerr * yerr);
   }
@@ -411,7 +419,7 @@ abstract class DrawingOBJ {
 
 abstract class Screen extends DrawingOBJ {
   protected ScreenChangeListener listener;
-  public Screen(PImage background, int objType, ScreenChangeListener listener) {
+  public Screen(PImage background, ScreenChangeListener listener) {
     super(0, 0, background, ObjType.BACKGROUND);
     this.listener = listener;
   }
@@ -644,10 +652,16 @@ class Enemy extends DrawingOBJ {
     }
   }
 
+  public void updateLocation() {
+    if (x < -objWidth) {
+      x+=1;
+    } else {
+      super.updateLocation();
+    }
+  }
+
   private void normalMove() {
     // normal moves
-    x += xSpeed;
-    y += ySpeed;
     if (!isInTeam) {
       if (x < target.x) {
         moveToOBJ(target);
@@ -703,7 +717,6 @@ class Enemy extends DrawingOBJ {
       textSize(tSize);
       drawStrokeText("!", #ff0000, #ffffff, 10, floor(y + (tSize >> 1)), 1);
     }
-    x += 1;
   }
 
   private void randomEnemy(boolean isAvoidFighter) {
@@ -733,7 +746,7 @@ class Enemy extends DrawingOBJ {
 
 class GameTitle extends DrawingOBJ {
 
-  public int hp = 0, level = 0;
+  public int hp = 0, score = 0;
 
   public GameTitle() {
     super(0, 0, resourcesManager.get(ResourcesManager.hp), ObjType.TITLE);
@@ -745,7 +758,7 @@ class GameTitle extends DrawingOBJ {
     textSize(15);
     textAlign(CENTER);
     drawStrokeText(hp + "", #ffffff, #000000, floor(x + 112), floor(y + 17), 1);
-    drawLV();
+    drawScore();
   }
 
   public void doGameLogic() {
@@ -776,10 +789,10 @@ class GameTitle extends DrawingOBJ {
   /**
    * to draw the value of level
    */
-  private void drawLV() {
+  private void drawScore() {
     textSize(15);
     textAlign(RIGHT);
-    drawStrokeText("Level:"+level, #ffffff, #000000, 620, 20, 1);
+    drawStrokeText("Score:" + score, #ffffff, #000000, 70, 470, 1);
   }
 }
 
@@ -796,7 +809,7 @@ class FrameAnimation extends DrawingOBJ {
   private GameDataChanged listener;
   private DrawingOBJ targetOBJ;
 
-  private void initSystem(GameDataChanged listener, int startID, int frameWidth, int frameHeight, int frameCnt) {
+  private void initSystem(GameDataChanged listener, int startID, int frameCnt) {
     this.listener = listener;
     this.frameCnt = frameCnt;
     setIsDrawSelf(false);
@@ -810,17 +823,17 @@ class FrameAnimation extends DrawingOBJ {
 
   public FrameAnimation(GameDataChanged listener, int startID) {
     super(64, 64, null, ObjType.TITLE);
-    initSystem(listener, startID, 64, 64, 5);
+    initSystem(listener, startID, 5);
   }
 
   public FrameAnimation(GameDataChanged listener, int startID, int frameWidth, int frameHeight) {
     super(frameWidth, frameHeight, null, ObjType.TITLE);
-    initSystem(listener, startID, frameWidth, frameHeight, 5);
+    initSystem(listener, startID, 5);
   }
 
   public FrameAnimation(GameDataChanged listener, int startID, int frameWidth, int frameHeight, int frameCnt) {
     super(frameWidth, frameHeight, null, ObjType.TITLE);
-    initSystem(listener, startID, frameWidth, frameHeight, frameCnt);
+    initSystem(listener, startID, frameCnt);
   }
 
   public void bindingOBJ(DrawingOBJ target) {
@@ -828,6 +841,7 @@ class FrameAnimation extends DrawingOBJ {
     x = target.x;
     y = target.y;
     xSpeed = target.xSpeed;
+    ySpeed = target.ySpeed;
   }
 
   public void SpecialDraw() {
@@ -852,7 +866,6 @@ class FrameAnimation extends DrawingOBJ {
         y = targetOBJ.y;
       }
     }
-    x += xSpeed;
   }
 }
 
@@ -889,16 +902,19 @@ class Bullet extends DrawingOBJ {
 
   public void doGameLogic() {
     isEnabled = (x>-objWidth);
-    if (isEnabled) {
-      x -= xSpeed;
-      y -= ySpeed;
-    }
     setIsDrawSelf(isEnabled);
   }
 
   public void setDisabled() {
     isEnabled = false;
     x = -1-objWidth;
+  }
+
+  public void updateLocation() {
+    if (isEnabled) {
+      x -= xSpeed;
+      y -= ySpeed;
+    }
   }
 
   public boolean isBulletEnabled() {
@@ -917,30 +933,30 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
   private final int SHOOT_DELAY = 100;
 
-  public int level, hp;
+  public int score, hp;
   private long lastShootTime;
-  private int bg2x = 640, speed = 5, teamCnt, teamId, listChangeCnt;
+  private int bg2x = 640, teamCnt, teamId, listChangeCnt;
   private boolean fighting, added;
   private ArrayList<DrawingOBJ>  drawingArray;
   private Fighter fighter = null;
   private GameTitle title = null;
   private Bullet[] bulletArray;
 
-  public OnGaming(ScreenChangeListener listener) {
-    super(resourcesManager.get(ResourcesManager.bg1), ObjType.BACKGROUND, listener);
+  private void initVariables() {
     fighting = false;
     drawingArray = new ArrayList();
-
     hp = 20;
-    level = 0;
+    score = 0;
     teamId = 0;
+    xSpeed = 5;
     listChangeCnt = 0;
     lastShootTime = 0;
+  }
 
+  private void initComponents() {
     fighter = new Fighter();
     fighter.setHP(hp) ;
     fighter.zOrder = 2;
-
     drawingArray.add(fighter);
 
     title = new GameTitle();
@@ -959,11 +975,17 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
       bulletArray[i]= temp;
       drawingArray.add(temp);
     }
+  }
 
+  public OnGaming(ScreenChangeListener listener) {
+    super(resourcesManager.get(ResourcesManager.bg1), listener);
+    initVariables();
+    initComponents();
     randomTeam();
   }
 
   public void SpecialDraw() {
+    // sort drawing array by z order
     for (int i = 0; i < drawingArray.size(); i++) {
       for (int j = i+1; j < drawingArray.size(); j++) {
         if (drawingArray.get(i).zOrder > drawingArray.get(j).zOrder) {
@@ -973,6 +995,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
         }
       }
     }
+    //do logic and draw objects
     for (int i = 0; (i < drawingArray.size()) && (i>-1); i++) {
       drawingArray.get(i).drawFrame();
       if (listChangeCnt>0) {
@@ -984,17 +1007,19 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
   public void doGameLogic() {
     doBackgroundLogic();
-    //*
+    // add a special enemy each 20 level
     boolean isSpealLevel = false;//(level%20 == 0);
-    if ((level>-1)&&(isSpealLevel)&&(!added)) {
+    if ((score>-1)&&(isSpealLevel)&&(!added)) {
       added = true;
-      drawingArray.add(new Enemy(bulletArray, fighter, this, level));
+      drawingArray.add(new Enemy(bulletArray, fighter, this, score));
     } else if (added&&(!isSpealLevel)) {
       added = false;
-    }//*/
-    if (hp <= 0) {
-      listener.endGame(level);
     }
+    // end the game while hp is under zero
+    if (hp <= 0) {
+      listener.endGame(score);
+    }
+    // fire logic
     if (fighting) {
       long timeErr = millis() - lastShootTime;
       if (timeErr>SHOOT_DELAY) {
@@ -1009,6 +1034,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
         }
       }
     }
+    // make bullets follow enemy
     bulletFollow();
   }
 
@@ -1046,7 +1072,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
   }
 
   private void addEnemyInTeam(int x_offset, int y, int speed) {
-    Enemy newEnemy = new Enemy(bulletArray, fighter, this, level);
+    Enemy newEnemy = new Enemy(bulletArray, fighter, this, score);
     newEnemy.x = newEnemy.x - x_offset;
     newEnemy.y = y;
     newEnemy.xSpeed = speed;
@@ -1056,7 +1082,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
   private void randomTeam() {
     int yy;
-    int s = floor(random(1, 5) * (level/50f+1));
+    int s = floor(random(1, 5) * (score / 1000f+1));
     if (teamId==0) {
       yy= floor(random(420)+30);
       teamCnt = 5;
@@ -1087,6 +1113,9 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
     }
   }
 
+  public void updateLocation() {
+  }
+
   private void doBackgroundLogic() {
     x = moveBG(floor(x));
     bg2x = moveBG(bg2x);
@@ -1095,12 +1124,12 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
   private int moveBG(int curX) {
     // the more level the more quick background moves
-    int speedOffset = level/10;
-    int maxOffset = speed<<1;
+    int speedOffset = score / 200;
+    int maxOffset = floor(xSpeed * 2);
     if (speedOffset> maxOffset) {
       speedOffset = maxOffset;
     }
-    curX +=640 + speed + speedOffset;
+    curX +=640 + xSpeed + speedOffset;
     curX %= 1280;
     curX -= 640;
     return curX;
@@ -1133,7 +1162,6 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
   public void addHP(int val) {
     hp += val;
-    level++;
     if (hp > 100) {
       hp = 100;
     }    
@@ -1172,11 +1200,13 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
       explode.bindingOBJ(target);
       explode.zOrder = 3;
       drawingArray.add(explode);
+      score += 20;
+      syncInfo();
     }
 
     listChangeCnt ++;
     if (!target.isInTeam) {    
-      drawingArray.add(new Enemy(bulletArray, fighter, this, level));
+      drawingArray.add(new Enemy(bulletArray, fighter, this, score));
     }
     target = null;
   }
@@ -1191,7 +1221,7 @@ class OnGaming extends Screen implements KeyPressListener, GameDataChanged {
 
   private void syncInfo() {
     title.hp = hp;
-    title.level= level;
+    title.score= score;
     fighter.setHP(hp);
   }
 }
@@ -1205,7 +1235,7 @@ class GameStart extends Screen implements MouseListener {
   private int alpha, alpha_offset ;
 
   public GameStart(ScreenChangeListener listener) {
-    super(resourcesManager.get(ResourcesManager.st2), ObjType.TITLE, listener);
+    super(resourcesManager.get(ResourcesManager.st2), listener);
     alpha_offset = 10;
     alpha = 0;
   }
@@ -1265,7 +1295,7 @@ class GameEnd extends Screen implements MouseListener {
   private int alpha, alpha_offset ;
 
   public GameEnd(ScreenChangeListener listener) {
-    super(resourcesManager.get(ResourcesManager.end2), ObjType.TITLE, listener);
+    super(resourcesManager.get(ResourcesManager.end2), listener);
     isOnButton = false;
     isPressButton = false;
   }
@@ -1286,7 +1316,7 @@ class GameEnd extends Screen implements MouseListener {
     }
     textAlign(CENTER);
     textSize(30);
-    drawStrokeText("Final Level:"+level, #ffffff, #ff0000, 320, 220, 2);
+    drawStrokeText("Final Score:"+level, #ffffff, #ff0000, 320, 220, 2);
   }
 
   public void doGameLogic() {
